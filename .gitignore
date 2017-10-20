@@ -1,0 +1,11 @@
+data/*
+result/*
+.Python
+bin/*
+lib/*
+include/*
+.DS_Store
+pip-selfcheck.json
+*.log
+*.xlsx
+auth.json

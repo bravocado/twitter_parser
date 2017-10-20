@@ -1,0 +1,3 @@
+pandas==0.20.3
+twython==3.6.0
+furl==1.0.1
