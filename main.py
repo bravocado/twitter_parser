@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-import json, os, sys, random, time, argparse, socket, re, codecs
+import json, os, sys, random, time, argparse, socket, re, codecs, requests
 from twython import Twython
 from twython import TwythonError
 from twython import TwythonStreamer
@@ -96,7 +96,12 @@ class Streamer(TwythonStreamer):
 	"""
 	def on_success(self, data):
 		print("from user: " + str(data["user"].get("screen_name")))
-		print("date: " + str(data.get("created_at")))
+		# print("date: " + str(data.get("created_at")))
+		created_at = data.get("created_at")
+		unix_time = time.mktime(time.strptime(created_at,"%a %b %d %H:%M:%S +0000 %Y")) + 25200 # quickhack for display only (Jakarta time)
+		# when = datetime.utcfromtimestamp(unix_time).strftime('%Y-%m-%d %H:%M:%S')
+		when = time.strftime("(UTC+7) %D %H:%M", time.localtime(int(unix_time)))
+		print("date: " + str(when))
 		if data.get("full_text"):
 			print(data.get("full_text"))
 		else:
@@ -167,7 +172,7 @@ class Crawler(object):
 	# initial
 	def __init__(self):
 		# when load normal json, disable
-		print("")
+		print("...")
 
 	# own cursor reader
 	def cursorReader(self, query, count, max_id):
@@ -221,19 +226,27 @@ class Crawler(object):
 		while True:
 			print("current sequence: " + str(sequence))
 
+			randomizer = random.randint(0, len(tokens)-1)
+			keys = keyRotator().rotator(sequence=randomizer)
+			consumer_key, consumer_key_secret, access_token, access_token_secret = keys
+			print("using key: " + str(consumer_key) + "\n")
+			try:
+				self._tw_auth = Twython(consumer_key, consumer_key_secret, oauth_version=2)
+				OAUTH2_ACCESS_TOKEN = self._tw_auth.obtain_access_token()
+				self._tw = Twython(consumer_key, access_token=OAUTH2_ACCESS_TOKEN)
+			except TwythonError as e:
+				print("error on Twython!")
+
 			result = self._tw.search(q=query,
 									max_id=max_id,
 									count=count,
 									result_type=result_type,
 									tweet_mode="extended")
 
-			time.sleep(1)
 			print("preprocessing data...")
 			self.preprocessingData(result, query, sequence, querytype)
-			time.sleep(1)
 			print("producing csv...")
 			self.produceCsv(post_data, query, querytype)
-			time.sleep(1)
 			print("current API rate limit: " + str(self._tw.get_lastfunction_header('x-rate-limit-remaining')))
 
 			# metadata finder
@@ -244,7 +257,7 @@ class Crawler(object):
 			else:
 				print("oops.. no max_id again.. \nlatest max_id: " + str(max_id))
 				created_at = result["statuses"][-1].get("created_at")
-				unix_time = time.mktime(time.strptime(created_at,"%a %b %d %H:%M:%S +0000 %Y"))
+				unix_time = time.mktime(time.strptime(created_at,"%a %b %d %H:%M:%S +0000 %Y")) + 25200 # quickhack Jakarta timezone
 				when = datetime.utcfromtimestamp(unix_time).strftime('%Y-%m-%d')
 				print("latest tweet created at: " + str(when))
 				break
@@ -253,48 +266,49 @@ class Crawler(object):
 			sequence+=1
 
 			print("sleeping...")
-			time.sleep(random.randint(5,10))
+			time.sleep(random.randint(1,5))
+
+	def streamHandler(self, querytype, query):
+		randomizer = random.randint(0, len(tokens)-1)
+		keys = keyRotator().rotator(sequence=randomizer)
+		consumer_key, consumer_key_secret, access_token, access_token_secret = keys
+		print("using key: " + str(consumer_key) + "\n")
+		try:
+			self._tw_stream = Streamer(app_key=consumer_key,
+									app_secret=consumer_key_secret,
+									oauth_token=access_token,
+									oauth_token_secret=access_token_secret,
+									chunk_size=stream_stopper, retry_in=300)
+			self._tw_stream.statuses.filter(track=query, tweet_mode="extended")
+		except requests.ConnectionError:
+			print("connection error..")
+			sys.exit(0)
+		if len(stream_data) == stream_stopper:
+			for i in stream_data:
+				self.jsonCruncher(i)
+			stream_data[:] = []
+			self.produceCsv(post_data, query, querytype)
+			print("\n==========================\n")
+		else:
+			pass
 
 	# ==========================
 	# MAIN ENGINE
 	# ==========================
 	def crawl(self, querytype, query, count, authentication):
 		if querytype == "search":
-			keys = keyRotator().authentication(authentication, key_sequence)
-			consumer_key, consumer_key_secret, access_token, access_token_secret = keys
-			try:
-				self._tw_auth = Twython(consumer_key, consumer_key_secret, oauth_version=2)
-				OAUTH2_ACCESS_TOKEN = self._tw_auth.obtain_access_token()
-				self._tw = Twython(consumer_key, access_token=OAUTH2_ACCESS_TOKEN)
-			except TwythonError as e:
-				print("error on Twython!")
-			self.searchHandler(query, count, querytype)
+			# todos: loop moved here
+			self.searchHandler(querytype=querytype,
+							query=query,
+							count=count)
 			# DEBUG
 			# result = self._tw.search(q=query, count=count, result_type="mixed", tweet_mode="extended")
 			# print(result["statuses"])
 			# result = self._tw.show_status(id=815411895343587330)
 		elif querytype == "stream":
 			while True:
-				randomizer = random.randint(0, len(tokens)-1)
-				keys = keyRotator().rotator(sequence=randomizer)
-				consumer_key, consumer_key_secret, access_token, access_token_secret = keys
-				self._tw_stream = Streamer(app_key=consumer_key,
-										app_secret=consumer_key_secret,
-										oauth_token=access_token,
-										oauth_token_secret=access_token_secret,
-										chunk_size=1, retry_in=120)
-				print("using key: " + str(consumer_key) + "\n")
-				self._tw_stream.statuses.filter(track=query, tweet_mode="extended")
-				if len(stream_data) == stream_stopper:
-					# print("preprocessing " + str(len(stream_data)) + " data...")
-					for i in stream_data:
-						self.jsonCruncher(i)
-					stream_data[:] = []
-					# print("producing csv...")
-					self.produceCsv(post_data, query, querytype)
-					print("\n==========================\n")
-				else:
-					pass
+				self.streamHandler(querytype=querytype,
+								query=query)
 
 		else:
 			print("Your API type not found in this function..")
@@ -464,12 +478,14 @@ class Crawler(object):
 		df = pd.DataFrame.from_records(data, columns=data_labels)
 
 		if query.startswith("#"):
-			filename = "hashtag-" + query.strip("#")
+			filename = "hashtag-" + query.replace("#", "")
 		elif query.startswith("@"):
-			filename = "user-" + query.strip("@")
+			filename = "user-" + query.replace("@", "")
 		elif " " in query == True:
 			print("ada spasi..")
 			filename = str(query.replace(" ", "_"))
+		elif " " in query:
+			filename = str(query.replace(" ", "_").replace(",", ""))
 		else:
 			filename = "keyword-" + query
 		if querytype == "search":
@@ -500,12 +516,11 @@ class Crawler(object):
 	def saveRawJson(self, data, query, sequence, querytype):
 		today = time.strftime("%Y_%m_%d")
 		if query.startswith("#"):
-			filename = "hashtag-" + query.strip("#")
+			filename = "hashtag-" + query.replace("#", "")
 		elif query.startswith("@"):
-			filename = "user-" + query.strip("@")
-		elif " " in query == True:
-			print("ada spasi..")
-			filename = str(query.replace(" ", "_"))
+			filename = "user-" + query.replace("@", "")
+		elif " " in query:
+			filename = str(query.replace(" ", "_").replace(",", ""))
 		else:
 			filename = "keyword-" + query
 		if querytype == "search":
