@@ -9,3 +9,5 @@ pip-selfcheck.json
 *.log
 *.xlsx
 auth.json
+*.sh
+runner.txt
