@@ -14,9 +14,15 @@ Abilities:
 - Rotating auth keys
 - Cursoring
 
-### Run it
+### Setting
+- rename the `auth.sample.json` file to `auth.json`
+- fill it with your own token
+- ready to go!
+
+### Run
 - Make sure you install all the requirements by running `pip install -r requirements.txt`
 - Then just use the `main.py` script
+- for options, see below
 
 ### Options
 
@@ -24,7 +30,7 @@ Abilities:
 optional arguments:
   -h, --help            show this help message and exit
   -t QUERYTYPE, --querytype QUERYTYPE
-                        API type you want to use
+                        API type you want to use. Available: search, stream, followers, following, user_timeline
   -q QUERY, --query QUERY
                         keyword query
   -c COUNT, --count COUNT
