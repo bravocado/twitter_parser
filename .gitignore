@@ -10,4 +10,3 @@ pip-selfcheck.json
 *.xlsx
 auth.json
 *.sh
-runner.txt
