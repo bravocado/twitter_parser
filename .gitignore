@@ -10,3 +10,9 @@ pip-selfcheck.json
 *.xlsx
 auth.json
 *.sh
+selenium/*
+man/*
+Scripts/*
+geckodriver.exe
+phantomjs.exe
+tcl/*
