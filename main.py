@@ -638,9 +638,9 @@ class Crawler(object):
 				temp_data.append(data.get("created_at")) # tweet created_at
 				temp_data.append(data.get("lang")) # tweet lang
 				if data.get("full_text"):
-					temp_data.append(data.get("full_text")) # tweet text if 280 char
+					temp_data.append(' '.join(data.get("full_text").split())) # tweet text if 280 char
 				else:
-					temp_data.append(data.get("text")) # tweet text if 140 char
+					temp_data.append(' '.join(data.get("full_text").split())) # tweet text if 140 char
 				temp_data.append(data.get("source")) # tweet source
 				temp_data.append(data.get("possibly_sensitive")) # tweet possibly_sensitive
 				if data.get("coordinates"):
